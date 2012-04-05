@@ -55,9 +55,9 @@ import org.lwjgl.opengl.GL11;
  *                                                                                                 ----> GlyphCache.Entry("0")
  *                                                                           ---> Glyph("0") -----/
  *                    N:1                      1:1                     1:N  /                    N:1
- * String("Be1") ------------> Key("Be0") -------------> Entry("Be0") -----+----> Glyph("e") ----------> GlyphCache.Enrry("e")
+ * String("Be1") ------------> Key("Be0") -------------> Entry("Be0") -----+----> Glyph("e") ----------> GlyphCache.Entry("e")
  *                                                                          \                    N:1
- *                                                                           ---> Glyph("B") ----------> GlyphCache.Enrry("B")
+ *                                                                           ---> Glyph("B") ----------> GlyphCache.Entry("B")
  * </pre>
  */
 public class StringCache
