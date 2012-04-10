@@ -137,6 +137,7 @@ public class StringCache
 
         /**
          * Computes a hash code on str in the same manner as the String class, except all ASCII digits hash as '0'
+         *
          * @return the augmented hash code on str
          */
         @Override
@@ -160,6 +161,7 @@ public class StringCache
         /**
          * Compare str against another object (specifically, the object's string representation as returned by toString).
          * All ASCII digits are considered equal by this method, as long as they are at the same index within the string.
+         *
          * @return true if the strings are the identical, or only differ in their ASCII digits
          */
         @Override
@@ -190,6 +192,7 @@ public class StringCache
 
         /**
          * Returns the contained String object within this Key.
+         *
          * @return the str object
          */
         @Override
@@ -244,6 +247,7 @@ public class StringCache
 
         /**
          * Performs numeric comparison on stripIndex. Allows binary search on ColorCode arrays in layoutStyle.
+         *
          * @param i the Integer object being compared
          * @return either -1, 0, or 1 if this < other, this == other, or this > other
          */
@@ -278,6 +282,7 @@ public class StringCache
 
         /**
          * Allows arrays of Glyph objects to be sorted. Performs numeric comparison on stringIndex.
+         *
          * @param o the other Glyph object being compared with this one
          * @return either -1, 0, or 1 if this < other, this == other, or this > other
          */
@@ -301,7 +306,36 @@ public class StringCache
         glyphCache = new GlyphCache(renderEngine);
         colorTable = colors;
 
-        /* Pre-cache the ASCII digits to allow for fast glyph substitution; need to cache each font style combination */
+        /* Pre-cache the ASCII digits to allow for fast glyph substitution */
+        cacheDightGlyphs();
+    }
+
+    /**
+     * Change the default font used to pre-render glyph images. If this method is called at runtime, the string cache is flushed so that
+     * all visible strings will be immediately re-layed out using the new font selection.
+     *
+     * @param fontName the new font name
+     * @param fontSize the new point size
+     */
+    public void setDefaultFont(String name, int size)
+    {
+        /* Change the font in the glyph cache and clear the string cache so all strings have to be re-layed out and re-rendered */
+        glyphCache.setDefaultFont(name, size);
+        weakRefCache.clear();
+        stringCache.clear();
+
+        /* Pre-cache the ASCII digits to allow for fast glyph substitution */
+        cacheDightGlyphs();
+    }
+
+    /**
+     * Pre-cache the ASCII digits to allow for fast glyph substitution. Called once from the constructor and called any time the font selection
+     * changes at runtime via setDefaultFont().
+     */
+    private void cacheDightGlyphs()
+    {
+        /* Need to cache each font style combination; the digitGlyphsReady = false disabled the normal glyph substitution mechanism */
+        digitGlyphsReady = false;
         digitGlyphs[Font.PLAIN] = cacheString("0123456789").glyphs;
         digitGlyphs[Font.BOLD] = cacheString("§l0123456789").glyphs;
         digitGlyphs[Font.ITALIC] = cacheString("§o0123456789").glyphs;
@@ -567,7 +601,7 @@ public class StringCache
 
     /**
      * Apply a new vertex color to the Tessellator instance based on the numeric chat color code. Only the RGB component of the
-     * color is replaced by a color code; the alpha component of the original default color will remain. 
+     * color is replaced by a color code; the alpha component of the original default color will remain.
      *
      * @param colorCode the chat color code as a number 0-15 or -1 to reset the default color
      * @param color the default color used when the colorCode is -1

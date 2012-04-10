@@ -72,15 +72,15 @@ public class GlyphCache
     /** Initial height in pixels of the stringImage buffer used to extract individual glyph images. */
     private static final int STRING_HEIGHT = 64;
 
-    /** The point size at which every OpenType font is rendered. */
-    private static final int FONT_SIZE = 18;
-
     /**
      * The width in pixels of a transparent border between individual glyphs in the cache texture. This border keeps neighboring
      * glyphs from "bleeding through" when the scaled GUI resolution is not pixel aligned and sometimes results in off-by-one
      * sampling of the glyph cache textures.
      */
     private static final int GLYPH_BORDER = 1;
+
+    /** The point size at which every OpenType font is rendered. */
+    private int fontSize = 18;
 
 
     /** Temporary image for rendering a string to and then extracting the glyph images from. */
@@ -207,9 +207,25 @@ public class GlyphCache
         allocateGlyphCacheTexture();
         allocateStringImage(STRING_WIDTH, STRING_HEIGHT);
 
-        /* Start by using Java's logical font which will transparently select the correct physical font for most languages */
+        /* Use Java's logical font as the default initial font if user does not override it in some configuration file */
         java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().preferLocaleFonts();
         usedFonts.add(new Font(Font.SANS_SERIF, Font.PLAIN, 1));
+    }
+
+    /**
+     * Change the default font used to pre-render glyph images. If this method is called at runtime, the existing glyph images will remain cached
+     * in their respective textures and will remain accessible to StringCache. This method is normally called by StringCache.setDefaultFont() since
+     * the StringCache must also invalidate itself so it can re-layout and re-cache the glyphs for all strings using the new font.
+     *
+     * @param name the new font name
+     * @param size the new point size
+     */
+    void setDefaultFont(String name, int size)
+    {
+        System.out.println("BetterFonts loading font \"" + name + "\"");
+        usedFonts.clear();
+        usedFonts.add(new Font(name, Font.PLAIN, 1));
+        fontSize = size;
     }
 
     /**
@@ -244,28 +260,8 @@ public class GlyphCache
      */
     Font lookupFont(char text[], int start, int limit, int style)
     {
-        Iterator<Font> iterator;
-
-        /* First, try to look for a specific font style instnace that was already used to pre-render at least one glyph */
-        iterator = fontCache.keySet().iterator();
-        while(iterator.hasNext())
-        {
-            /* Only use the font if it can layout at least the first character of the requested string range */
-            Font font = iterator.next();
-            if(font.canDisplayUpTo(text, start, limit) != start)
-            {
-                /* Additionally, only use the font if it has the same style as was requested by the caller */
-                int fontStyle = (font.isBold() ? Font.BOLD : 0) | (font.isItalic() ? Font.ITALIC : 0);
-                if(fontStyle == style)
-                {
-                    /* Since this font is already of the proper size and style, return it immediately */
-                    return font;
-                }
-            }
-        }
-
-        /* Failing fontCache, try using one an already known base font; the first font in usedFonts list is always Java's logical one */
-        iterator = usedFonts.iterator();
+        /* Try using an already known base font; the first font in usedFonts list is the one set with setDefaultFont() */
+        Iterator<Font> iterator = usedFonts.iterator();
         while(iterator.hasNext())
         {
             /* Only use the font if it can layout at least the first character of the requested string range */
@@ -273,7 +269,7 @@ public class GlyphCache
             if(font.canDisplayUpTo(text, start, limit) != start)
             {
                 /* Return a font instance of the proper point size and style; usedFonts has only 1pt sized plain style fonts */
-                return font.deriveFont(style, FONT_SIZE);
+                return font.deriveFont(style, fontSize);
             }
         }
 
@@ -286,19 +282,19 @@ public class GlyphCache
             if(font.canDisplayUpTo(text, start, limit) != start)
             {
                 /* If found, add this font to the usedFonts list so it can be looked up faster next time */
-                System.out.println("Loading font: " + font.getFontName());
+                System.out.println("BetterFonts loading font \"" + font.getFontName() + "\"");
                 usedFonts.add(font);
 
                 /* Return a font instance of the proper point size and style; allFonts has only 1pt sized plain style fonts */
-                return font.deriveFont(style, FONT_SIZE);
+                return font.deriveFont(style, fontSize);
             }
         }
 
-        /* If no supported fonts found, use Java's logical font (first in usedFonts) so it can draw its unknown character glyphs */
-        Font font = usedFonts.iterator().next();
+        /* If no supported fonts found, use the default one (first in usedFonts) so it can draw its unknown character glyphs */
+        Font font = usedFonts.get(0);
 
         /* Return a font instance of the proper point size and style; usedFonts only 1pt sized plain style fonts */
-        return font.deriveFont(style, FONT_SIZE);
+        return font.deriveFont(style, fontSize);
     }
 
     /**
