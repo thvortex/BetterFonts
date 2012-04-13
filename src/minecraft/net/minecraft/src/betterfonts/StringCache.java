@@ -356,7 +356,6 @@ public class StringCache
      * @return the total advance (horizontal distance) of this string
      *
      * @todo Add optional NumericShaper to replace ASCII digits with locale specific ones
-     * @todo Test if using Tessellator fixes the white text problem with old broken OpenGL drivers (Possibly some Intel?)
      * @todo Add support for the "k" code which randomly replaces letters on each render (used only by splash screen)
      * @todo Pre-sort by texture to minimize binds; can store colors per glyph in string cache
      */

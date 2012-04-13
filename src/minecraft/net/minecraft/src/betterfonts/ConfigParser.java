@@ -36,7 +36,7 @@ public class ConfigParser
     /** Java's logical font names that can always be used inside the font.name property of the configuration file. */
     private static final String LOGICAL_FONTS[] = { "Serif", "SansSerif", "Dialog", "DialogInput", "Monospaced" };
 
-    /** List of all fonts on the system used for checking if font.name in the config file is valid. */
+    /** List of all fonts on the system + logical font names; used for checking if font.name in the config file is valid. */
     private Font allFonts[] = GraphicsEnvironment.getLocalGraphicsEnvironment().getAllFonts();
 
     /** Properties created after parsing of the config file. */
@@ -51,7 +51,7 @@ public class ConfigParser
     public boolean loadConfig(String fileName)
     {
         boolean success = false;
-    
+
         try
         {
             FileInputStream cfgFile = new FileInputStream(Minecraft.getMinecraftDir() + fileName);
@@ -67,13 +67,20 @@ public class ConfigParser
         {
             System.out.println("BetterFonts " + e.getMessage());
         }
-        
+
         return success;
     }
-    
+
     /**
      * Return the optional "font.name" property from user configuration file. Verify the requested font exists on the system
-     * (based on a case insensitive string match on the name).
+     * based on a case insensitive substring match between the font face name and the user requested name. Note that Java has
+     * some inconsistency in how it reports font face vs font family names compared to what the Fonts control panel under
+     * Windows 7 shows. For example, the control panel shows "Franklin Gothic" as a font family with two styles "Medium" and
+     * "Medium Italic". Yet Java 6 reports both the font <i>family</y> as "Franklin Gothic Medium". These kinds of variations
+     * make it difficult to match font names properly, so the approach here it to first look for an exact font face name
+     * match, and failing that a substring match. In other words, if the user specified "Times" it would most likely match with
+     * "Times New Roman". Even more interesting, is when a font shows up with family name "Latin Wide" in the control panel
+     * but Java returns "Wide Latin" for both the font's famil and face name.
      *
      * @param defaultValue the default value to use if the font.name property is missing or is invalid
      * @return returns the value of the font.name property or defaultValue if font.name is missing/invalid
@@ -87,23 +94,54 @@ public class ConfigParser
             return defaultValue;
         }
 
+        /* Trim whitespace; convert to lowercase so the partial name lookups with indexOf() are case insensitive */
+        String searchName = fontName.trim().toLowerCase();
+
         /* Java's logical font names are always allowed in the font.name property */
         for(int i = 0; i < LOGICAL_FONTS.length; i++)
         {
-            if(LOGICAL_FONTS[i].compareToIgnoreCase(fontName) == 0)
+            if(LOGICAL_FONTS[i].compareToIgnoreCase(searchName) == 0)
             {
                 return LOGICAL_FONTS[i];
             }
         }
 
-        /* Search through all fonts installed on the system for any physical fonts with a matching font name */
-        for(int i = 0; i < allFonts.length; i++)
+        /* Some fonts report their plain variety with "Medium" in the name so try exact search on that too */
+        String altSearchName = searchName + " Medium" ;
+
+        /* If a font partially matches a user requested name, remember it here in case there are no exact matches */
+        String partialMatch = null;
+
+        /* Search through all available fonts installed on the system */
+        for(int index = 0; index < allFonts.length; index++)
         {
-            String name = allFonts[i].getFontName();
-            if(name.compareToIgnoreCase(fontName) == 0)
+            /* Always prefer an exact match on the font face name which terminates the search with a result */
+            Font font = allFonts[index];
+            String name = font.getFontName();
+            if(name.compareToIgnoreCase(searchName) == 0 || name.compareToIgnoreCase(altSearchName) == 0)
             {
                 return name;
             }
+
+            /*
+             * Remember partial name matches so they can be returned if no other exact matche exists. This match is done
+             * with both the font family and font face concatenated together to handle the weird case of the "Latin Wide"
+             * font. Always prefer to partial match the shortest possible font face name to match "Times New Roman" before
+             * "Times New Roman Bold" for instance.
+             */
+            if((font.getFamily() + " " + name).toLowerCase().indexOf(searchName) != -1)
+            {
+                if(partialMatch == null || partialMatch.length() > name.length())
+                {
+                    partialMatch = name;
+                }
+            }
+        }
+
+        /* If not exact match was found, then return the last partial match that was made */
+        if(partialMatch != null)
+        {
+            return partialMatch;
         }
 
         /* Print warning message if the user requested font cannot be found on the system */
@@ -141,7 +179,7 @@ public class ConfigParser
         {
             System.out.println("BetterFonts font.size must be an integer greater than zero");
         }
-        
+
         return defaultValue;
     }
 }
