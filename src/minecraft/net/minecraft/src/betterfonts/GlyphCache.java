@@ -82,6 +82,9 @@ public class GlyphCache
     /** The point size at which every OpenType font is rendered. */
     private int fontSize = 18;
 
+    /** If true, then enble anti-aliasing when rendering the font glyph */
+    private boolean antiAliasEnabled = false;
+
 
     /** Temporary image for rendering a string to and then extracting the glyph images from. */
     private BufferedImage stringImage;
@@ -220,12 +223,15 @@ public class GlyphCache
      * @param name the new font name
      * @param size the new point size
      */
-    void setDefaultFont(String name, int size)
+    void setDefaultFont(String name, int size, boolean antiAlias)
     {
         System.out.println("BetterFonts loading font \"" + name + "\"");
         usedFonts.clear();
         usedFonts.add(new Font(name, Font.PLAIN, 1));
+
         fontSize = size;
+        antiAliasEnabled = antiAlias;
+        setRenderingHints();
     }
 
     /**
@@ -531,15 +537,27 @@ public class GlyphCache
     {
         stringImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         stringGraphics = stringImage.createGraphics();
-
-        stringGraphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
-        stringGraphics.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+        setRenderingHints();
 
         /* Use transparent white color when erasing the BufferedImage with clearRect() */
         stringGraphics.setBackground(new Color(255, 255, 255, 0));
 
         /* Full white (1.0, 1.0, 1.0, 1.0) can be modulated by vertex color to produce a full gamut of text colors */
         stringGraphics.setPaint(Color.WHITE);
+    }
+
+    /**
+     * Set rendering hints on stringGraphics object. Uses current antiAliasEnabled settings and is therefore called both from
+     * allocateStringImage() when expanding the size of the BufferedImage and from setDefaultFont() when changing current
+     * configuration.
+     */
+    private void setRenderingHints()
+    {
+        stringGraphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+            antiAliasEnabled ? RenderingHints.VALUE_ANTIALIAS_ON : RenderingHints.VALUE_ANTIALIAS_OFF);
+        stringGraphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+            antiAliasEnabled ? RenderingHints.VALUE_TEXT_ANTIALIAS_ON : RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+        stringGraphics.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
     }
 
     /**

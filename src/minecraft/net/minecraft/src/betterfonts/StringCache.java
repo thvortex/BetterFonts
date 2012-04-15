@@ -317,10 +317,10 @@ public class StringCache
      * @param fontName the new font name
      * @param fontSize the new point size
      */
-    public void setDefaultFont(String name, int size)
+    public void setDefaultFont(String name, int size, boolean antiAlias)
     {
         /* Change the font in the glyph cache and clear the string cache so all strings have to be re-layed out and re-rendered */
-        glyphCache.setDefaultFont(name, size);
+        glyphCache.setDefaultFont(name, size, antiAlias);
         weakRefCache.clear();
         stringCache.clear();
 
@@ -378,6 +378,35 @@ public class StringCache
 
         /* Track which texture is currently bound to minimize the number of glBindTexture() and Tessellator.draw() calls needed */
         int boundTextureName = 0;
+
+        /*
+         * Remember current GL blending function before changing it so it can be restored later on. Minecraft uses only
+         * glBlendFunc() so it's not necessary to save RGB/A blend functions separately or save the blend equation.
+         */
+        int glBlendSrcFunc = 0, glBlendDstFunc = 0;
+
+        /*
+         * This color change will have no effect on the actual text (since colors are included in the Tessellator vertex
+         * array), however GuiEditSign of all things depends on having the current color set to white when it renders its
+         * "Edit sign message:" text. Otherwise, the sign which is rendered underneath would look too dark.
+         */
+        GL11.glColor3f(color >> 16 & 0xff, color >> 8 & 0xff, color & 0xff);
+
+        /*
+         * Enable GL_BLEND in case the font is drawn anti-aliased. Fonts without hinting may be forced to use anti-aliasing
+         * on some platforms, overriding the setRenderingHint() in GlyphCache. One such example was the "Vintage" font
+         * (http://www.dafont.com/vintage.font) when running Java 1.6 on Mac OS X 10.6.8. Minecraft uses multiple blend
+         * functions so it has to be specified here as well for consistent blending. However, If GL_BLEND is already enabled
+         * then the blend function is already set properly (for chat rendering which has to fade the text out).
+         */
+        boolean glBlendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+        if(!glBlendEnabled)
+        {
+            GL11.glEnable(GL11.GL_BLEND);
+            glBlendSrcFunc = GL11.glGetInteger(GL11.GL_BLEND_SRC);
+            glBlendDstFunc = GL11.glGetInteger(GL11.GL_BLEND_DST);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        }
 
         /* Using the Tessellator to queue up data in a vertex array and then draw all at once should be faster than immediate mode */
         Tessellator tessellator = Tessellator.instance;
@@ -517,6 +546,13 @@ public class StringCache
             /* Finish drawing the last strikethrough/underline segments */
             tessellator.draw();
             GL11.glEnable(GL11.GL_TEXTURE_2D);
+        }
+
+        /* Restore previous GL_BLEND and glBlendFunc() state */
+        if(!glBlendEnabled)
+        {
+            GL11.glBlendFunc(glBlendSrcFunc, glBlendDstFunc);
+            GL11.glDisable(GL11.GL_BLEND);
         }
 
         /* Return total horizontal advance (slightly wider than the bounding box, but close enough for centering strings) */

@@ -182,4 +182,36 @@ public class ConfigParser
 
         return defaultValue;
     }
+
+    /**
+     * Load an optional true/false property from user configuration file. If the property exists and is either the
+     * (case-insensitive) string "true" or "false", its value is returned as a boolean. If the property is present,
+     * but contains any other string, a warning is printed to the console and the default value is returned.
+     * Otherwise
+     *
+     * @param propertyName the property name to read from the configuration file
+     * @param defaultValue the default value to use if the property is missing
+     * @return returns the value of the property or defaultValue if the property is missing/invalid
+     */
+    public boolean getBoolean(String propertyName, boolean defaultValue)
+    {
+        String value = cfgProps.getProperty(propertyName);
+        if(value == null)
+        {
+            return defaultValue;
+        }
+        else if(value.compareToIgnoreCase("true") == 0)
+        {
+            return true;
+        }
+        else if(value.compareToIgnoreCase("false") == 0)
+        {
+            return false;
+        }
+        else
+        {
+            System.out.println("BetterFonts " + propertyName + " must be either \"true\" or \"false\"");
+            return defaultValue;
+        }
+    }
 }

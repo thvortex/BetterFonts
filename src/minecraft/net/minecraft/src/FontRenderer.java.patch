@@ -1,106 +1,37 @@
 diff --git a/src/minecraft/net/minecraft/src/FontRenderer.java b/src/minecraft/net/minecraft/src/FontRenderer.java
-index 3251f0a..0904b44 100644
+index 0904b44..9c87dd6 100644
 --- a/src/minecraft/net/minecraft/src/FontRenderer.java
 +++ b/src/minecraft/net/minecraft/src/FontRenderer.java
-@@ -1,5 +1,7 @@
- package net.minecraft.src;
- 
-+import net.minecraft.src.betterfonts.StringCache;
-+import net.minecraft.src.betterfonts.ConfigParser;
- import java.awt.image.BufferedImage;
- import java.io.IOException;
- import java.io.InputStream;
-@@ -13,6 +15,9 @@ import org.lwjgl.opengl.GL11;
- 
- public class FontRenderer
+@@ -17,6 +17,7 @@ public class FontRenderer
  {
-+    public static boolean betterFontsEnabled = true;
-+    public StringCache stringCache;
-+
+     public static boolean betterFontsEnabled = true;
+     public StringCache stringCache;
++    public boolean dropShadowEnabled = true;
+ 
      /**
       * Compiled regular expression pattern for matching color codes in a string
-      */
-@@ -181,6 +186,23 @@ public class FontRenderer
+@@ -198,8 +199,10 @@ public class FontRenderer
+             {
+                 String fontName = config.getFontName("SansSerif");
+                 int fontSize = config.getFontSize(18);
++                boolean antiAlias = config.getBoolean("font.antialias", false);
++                dropShadowEnabled = config.getBoolean("font.dropshadow", true);
  
-             colorCode[l] = (l1 & 0xff) << 16 | (j2 & 0xff) << 8 | l2 & 0xff;
+-                stringCache.setDefaultFont(fontName, fontSize);
++                stringCache.setDefaultFont(fontName, fontSize, antiAlias);
+                 System.out.println("BetterFonts configuration loaded");
+             }
          }
-+
-+        /* Only use OpenType rendering for the primary FontRenderer and not for the enchantment table Standard Galactic renderer */
-+        if(par2Str.equals("/font/default.png"))
+@@ -332,7 +335,11 @@ public class FontRenderer
+             par1Str = bidiReorder(par1Str);
+         }
+ 
+-        int i = renderString(par1Str, par2 + 1, par3 + 1, par4, true);
++        int i = 0;
++        if(dropShadowEnabled)
 +        {
-+            stringCache = new StringCache(renderEngine, colorCode);
-+
-+            /* Read optional config file to override the default font name/size */
-+            ConfigParser config = new ConfigParser();
-+            if(config.loadConfig("/config/BetterFonts.cfg"))
-+            {
-+                String fontName = config.getFontName("SansSerif");
-+                int fontSize = config.getFontSize(18);
-+
-+                stringCache.setDefaultFont(fontName, fontSize);
-+                System.out.println("BetterFonts configuration loaded");
-+            }
++            i = renderString(par1Str, par2 + 1, par3 + 1, par4, true);
 +        }
+         i = Math.max(i, renderString(par1Str, par2, par3, par4, false));
+         return i;
      }
- 
-     /**
-@@ -333,6 +355,10 @@ public class FontRenderer
-      */
-     private String bidiReorder(String par1Str)
-     {
-+        if (betterFontsEnabled && stringCache != null)
-+        {
-+            return par1Str;
-+        }
-         if (par1Str == null || !Bidi.requiresBidi(par1Str.toCharArray(), 0, par1Str.length()))
-         {
-             return par1Str;
-@@ -567,7 +593,14 @@ public class FontRenderer
-             GL11.glColor4f(red, blue, green, alpha);
-             posX = par2;
-             posY = par3;
--            renderStringAtPos(par1Str, par5);
-+            if (betterFontsEnabled && stringCache != null)
-+            {
-+                posX += stringCache.renderString(par1Str, par2, par3, par4, par5);
-+            }
-+            else
-+            {
-+                renderStringAtPos(par1Str, par5);
-+            }
-             return (int)posX;
-         }
-         else
-@@ -581,6 +614,10 @@ public class FontRenderer
-      */
-     public int getStringWidth(String par1Str)
-     {
-+        if (betterFontsEnabled && stringCache != null)
-+        {
-+            return stringCache.getStringWidth(par1Str);
-+        }
-         if (par1Str == null)
-         {
-             return 0;
-@@ -670,6 +707,10 @@ public class FontRenderer
-      */
-     public String trimStringToWidth(String par1Str, int par2, boolean par3)
-     {
-+        if (betterFontsEnabled && stringCache != null)
-+        {
-+            return stringCache.trimStringToWidth(par1Str, par2, par3);
-+        }
-         StringBuilder stringbuilder = new StringBuilder();
-         int i = 0;
-         int j = par3 ? par1Str.length() - 1 : 0;
-@@ -928,6 +969,10 @@ public class FontRenderer
-      */
-     private int sizeStringToWidth(String par1Str, int par2)
-     {
-+        if (betterFontsEnabled && stringCache != null)
-+        {
-+            return stringCache.sizeStringToWidth(par1Str, par2);
-+        }
-         int i = par1Str.length();
-         int j = 0;
-         int k = 0;
