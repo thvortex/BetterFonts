@@ -116,8 +116,11 @@ public class StringCache
      */
     private Glyph[][] digitGlyphs = new Glyph[4][];
 
-    /** True if digitGlyphs[] has been assigned and cacheString() can begin replacing all digits with '0' in the string */
+    /** True if digitGlyphs[] has been assigned and cacheString() can begin replacing all digits with '0' in the string. */
     private boolean digitGlyphsReady = false;
+
+    /** If true, then enble GL_BLEND in renderString() so anti-aliasing font glyphs show up properly. */
+    private boolean antiAliasEnabled = false;
 
     /**
      * Wraps a String and acts as the key into stringCache. The hashCode() and equals() methods consider all ASCII digits
@@ -301,9 +304,9 @@ public class StringCache
      * @param colors 32 element array of RGBA colors corresponding to the 16 text color codes followed by 16 darker version of the
      * color codes for use as drop shadows
      */
-    public StringCache(RenderEngine renderEngine, int colors[])
+    public StringCache(int colors[])
     {
-        glyphCache = new GlyphCache(renderEngine);
+        glyphCache = new GlyphCache();
         colorTable = colors;
 
         /* Pre-cache the ASCII digits to allow for fast glyph substitution */
@@ -321,6 +324,7 @@ public class StringCache
     {
         /* Change the font in the glyph cache and clear the string cache so all strings have to be re-layed out and re-rendered */
         glyphCache.setDefaultFont(name, size, antiAlias);
+        antiAliasEnabled = antiAlias;
         weakRefCache.clear();
         stringCache.clear();
 
@@ -358,6 +362,7 @@ public class StringCache
      * @todo Add optional NumericShaper to replace ASCII digits with locale specific ones
      * @todo Add support for the "k" code which randomly replaces letters on each render (used only by splash screen)
      * @todo Pre-sort by texture to minimize binds; can store colors per glyph in string cache
+     * @todo Optimize the underline/strikethrough drawing to draw a single line for each run
      */
     public int renderString(String str, int startX, int startY, int initialColor, boolean shadowFlag)
     {
@@ -380,12 +385,6 @@ public class StringCache
         int boundTextureName = 0;
 
         /*
-         * Remember current GL blending function before changing it so it can be restored later on. Minecraft uses only
-         * glBlendFunc() so it's not necessary to save RGB/A blend functions separately or save the blend equation.
-         */
-        int glBlendSrcFunc = 0, glBlendDstFunc = 0;
-
-        /*
          * This color change will have no effect on the actual text (since colors are included in the Tessellator vertex
          * array), however GuiEditSign of all things depends on having the current color set to white when it renders its
          * "Edit sign message:" text. Otherwise, the sign which is rendered underneath would look too dark.
@@ -393,18 +392,15 @@ public class StringCache
         GL11.glColor3f(color >> 16 & 0xff, color >> 8 & 0xff, color & 0xff);
 
         /*
-         * Enable GL_BLEND in case the font is drawn anti-aliased. Fonts without hinting may be forced to use anti-aliasing
-         * on some platforms, overriding the setRenderingHint() in GlyphCache. One such example was the "Vintage" font
-         * (http://www.dafont.com/vintage.font) when running Java 1.6 on Mac OS X 10.6.8. Minecraft uses multiple blend
-         * functions so it has to be specified here as well for consistent blending. However, If GL_BLEND is already enabled
-         * then the blend function is already set properly (for chat rendering which has to fade the text out).
+         * Enable GL_BLEND in case the font is drawn anti-aliased because Minecraft itself only enables blending for chat text
+         * (so it can fade out), but not GUI text or signs. Minecraft uses multiple blend functions so it has to be specified here
+         * as well for consistent blending. To reduce the overhead of OpenGL state changes and making native LWJGL calls, this
+         * function doesn't try to save/restore the blending state. Hopefully everything else that depends on blending in Minecraft
+         * will set its own state as needed.
          */
-        boolean glBlendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
-        if(!glBlendEnabled)
+        if(antiAliasEnabled)
         {
             GL11.glEnable(GL11.GL_BLEND);
-            glBlendSrcFunc = GL11.glGetInteger(GL11.GL_BLEND_SRC);
-            glBlendDstFunc = GL11.glGetInteger(GL11.GL_BLEND_DST);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         }
 
@@ -548,12 +544,6 @@ public class StringCache
             GL11.glEnable(GL11.GL_TEXTURE_2D);
         }
 
-        /* Restore previous GL_BLEND and glBlendFunc() state */
-        if(!glBlendEnabled)
-        {
-            GL11.glBlendFunc(glBlendSrcFunc, glBlendDstFunc);
-            GL11.glDisable(GL11.GL_BLEND);
-        }
 
         /* Return total horizontal advance (slightly wider than the bounding box, but close enough for centering strings) */
         return entry.advance / 2;

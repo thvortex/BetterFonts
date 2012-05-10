@@ -19,7 +19,6 @@
 
 package net.minecraft.src.betterfonts;
 
-import net.minecraft.src.RenderEngine;
 import net.minecraft.src.GLAllocation;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -27,6 +26,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.nio.IntBuffer;
+import java.nio.ByteOrder;
+import java.nio.ByteBuffer;
 import java.awt.image.BufferedImage;
 import java.awt.font.FontRenderContext;
 import java.awt.font.GlyphVector;
@@ -79,6 +80,9 @@ public class GlyphCache
      */
     private static final int GLYPH_BORDER = 1;
 
+    /** Transparent (alpha zero) white background color for use with BufferedImage.clearRect(). */
+    private static Color BACK_COLOR = new Color(255, 255, 255, 0);
+
     /** The point size at which every OpenType font is rendered. */
     private int fontSize = 18;
 
@@ -107,8 +111,17 @@ public class GlyphCache
     private int imageData[] = new int[TEXTURE_WIDTH * TEXTURE_HEIGHT];
 
     /** Wrapper around a direct byte buffer which can be used with glTexSubImage2D(). */
-    private IntBuffer imageBuffer = GLAllocation.createDirectIntBuffer(TEXTURE_WIDTH * TEXTURE_HEIGHT);
+    //private IntBuffer imageBuffer = GLAllocation.createDirectIntBuffer(TEXTURE_WIDTH * TEXTURE_HEIGHT);
 
+    /**
+     * A big-endian direct int buffer used with glTexSubImage2D() and glTexImage2D(). Used for loading the pre-rendered glyph
+     * images from the glyphCacheImage BufferedImage into OpenGL textures. This buffer uses big-endian byte ordering to ensure
+     * that the integers holding packed RGBA colors are stored into memory in a predictable order.
+     */
+    private IntBuffer imageBuffer = ByteBuffer.allocateDirect(4 * TEXTURE_WIDTH * TEXTURE_HEIGHT).order(ByteOrder.BIG_ENDIAN).asIntBuffer();
+
+    /** A single integer direct buffer with native byte ordering used for returning values from glGenTextures(). */
+    private IntBuffer singleIntBuffer = GLAllocation.createDirectIntBuffer(1);
 
     /** List of all available physical fonts on the system. Used by lookupFont() to find alternate fonts. */
     private List<Font> allFonts = Arrays.asList(GraphicsEnvironment.getLocalGraphicsEnvironment().getAllFonts());
@@ -121,9 +134,6 @@ public class GlyphCache
      */
     private List<Font> usedFonts = new ArrayList();
 
-
-    /** The RenderEngine instance is needed for its allocateAndSetupTexture() method */
-    private RenderEngine renderEngine;
 
     /** ID of current OpenGL cache texture being used by cacheGlyphs() to store pre-rendered glyph images. */
     private int textureName;
@@ -197,12 +207,10 @@ public class GlyphCache
      *
      * @param renderEngine needed to allocate OpenGL textures
      */
-    public GlyphCache(RenderEngine re)
+    public GlyphCache()
     {
-        renderEngine = re;
-
-        /* Use transparent white color when erasing the BufferedImage with clearRect() */
-        glyphCacheGraphics.setBackground(new Color(255, 255, 255, 0));
+        /* Set background color for use with clearRect() */
+        glyphCacheGraphics.setBackground(BACK_COLOR);
 
         /* The drawImage() to this buffer will copy all source pixels instead of alpha blending them into the current image */
         glyphCacheGraphics.setComposite(AlphaComposite.Src);
@@ -512,16 +520,15 @@ public class GlyphCache
         /* Only update OpenGL texture if changes were made to the texture */
         if(dirty != null)
         {
+            /* Load imageBuffer with pixel data ready for transfer to OpenGL texture */
+            updateImageBuffer(dirty.x, dirty.y, dirty.width, dirty.height);
+
             /*
             * NOTE: Since the text is drawn in white with full alpha, each pixel is always all 0s or all 1s
             * and there is no need to manually convert from Java's ARGB layout to OpenGLs RGBA. This avoids
             * having to copy into an extra byte array first; instead the int array is copied straight to a
             * direct int buffer.
             */
-            glyphCacheImage.getRGB(dirty.x, dirty.y, dirty.width, dirty.height, imageData, 0, dirty.width);
-            imageBuffer.clear();
-            imageBuffer.put(imageData);
-            imageBuffer.flip();
 
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureName);
             GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, dirty.x, dirty.y, dirty.width, dirty.height,
@@ -539,10 +546,13 @@ public class GlyphCache
         stringGraphics = stringImage.createGraphics();
         setRenderingHints();
 
-        /* Use transparent white color when erasing the BufferedImage with clearRect() */
-        stringGraphics.setBackground(new Color(255, 255, 255, 0));
+        /* Set background color for use with clearRect() */
+        stringGraphics.setBackground(BACK_COLOR);
 
-        /* Full white (1.0, 1.0, 1.0, 1.0) can be modulated by vertex color to produce a full gamut of text colors */
+        /*
+         * Full white (1.0, 1.0, 1.0, 1.0) can be modulated by vertex color to produce a full gamut of text colors, although with
+         * a GL_ALPHA8 texture, only the alpha component of the color will actually get loaded into the texture.
+         */
         stringGraphics.setPaint(Color.WHITE);
     }
 
@@ -557,6 +567,7 @@ public class GlyphCache
             antiAliasEnabled ? RenderingHints.VALUE_ANTIALIAS_ON : RenderingHints.VALUE_ANTIALIAS_OFF);
         stringGraphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
             antiAliasEnabled ? RenderingHints.VALUE_TEXT_ANTIALIAS_ON : RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+
         stringGraphics.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
     }
 
@@ -564,16 +575,59 @@ public class GlyphCache
      * Allocate a new OpenGL texture for caching pre-rendered glyph images. The new texture is initialized to fully transparent
      * white so the individual glyphs images within can have a transparent border between them. The new texture remains bound
      * after returning from the function.
+     *
+     * @todo use GL_ALPHA4 if anti-alias is turned off for even smaller textures
      */
     private void allocateGlyphCacheTexture()
     {
         /* Initialize the background to all white but fully transparent. */
         glyphCacheGraphics.clearRect(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT);
 
-        /* Allocate new OpenGL texure and initialize with the now cleared BufferedImage */
-        textureName = renderEngine.allocateAndSetupTexture(glyphCacheImage);
+        /* Allocate new OpenGL texure */
+        singleIntBuffer.clear();
+        GLAllocation.generateTextureNames(singleIntBuffer);
+        textureName = singleIntBuffer.get(0);
+
+        /* Load imageBuffer with pixel data ready for transfer to OpenGL texture */
+        updateImageBuffer(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+
+        /*
+         * Initialize texture with the now cleared BufferedImage. Using a texture with GL_ALPHA8 internal format may result in
+         * faster rendering since the GPU has to only fetch 1 byte per texel instead of 4 with a regular RGBA texture.
+         */
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureName);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_ALPHA8, TEXTURE_WIDTH, TEXTURE_HEIGHT, 0,
+            GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, imageBuffer);
 
         /* Explicitely disable mipmap support becuase updateTexture() will only update the base level 0 */
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+    }
+
+    /**
+     * Copy pixel data from a region in glyphCacheImage into imageBuffer and prepare it for use with glText(Sub)Image2D(). This
+     * function takes care of converting the ARGB format used with BufferedImage into the RGBA format used by OpenGL.
+     *
+     * @param x the horizontal coordinate of the region's upper-left corner
+     * @param y the vertical coordinate of the region's upper-left corner
+     * @param width the width of the pixel region that will be copied into the buffer
+     * @param height the height of the pixel region that will be copied into the buffer
+     */
+    private void updateImageBuffer(int x, int y, int width, int height)
+    {
+        /* Copy raw pixel data from BufferedImage to imageData array with one integer per pixel in 0xAARRGGBB form */
+        glyphCacheImage.getRGB(x, y, width, height, imageData, 0, width);
+
+        /* Swizzle each color integer from Java's ARGB format to OpenGL's RGBA */
+        for(int i = 0; i < width * height; i++)
+        {
+            int color = imageData[i];
+            imageData[i] = (color << 8) | (color >>> 24);
+        }
+
+        /* Copy int array to direct buffer; big-endian order ensures a 0xRR, 0xGG, 0xBB, 0xAA byte layout */
+        imageBuffer.clear();
+        imageBuffer.put(imageData);
+        imageBuffer.flip();
     }
 }

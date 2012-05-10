@@ -94,8 +94,11 @@ public class ConfigParser
             return defaultValue;
         }
 
-        /* Trim whitespace; convert to lowercase so the partial name lookups with indexOf() are case insensitive */
-        String searchName = fontName.trim().toLowerCase();
+        /*
+         * Trim whitespace; convert to lowercase so the partial name lookups with indexOf() are case insensitive.
+         * Max OSX also puts a - between the font family and style in the string returned by getName() so trim those too.
+         */
+        String searchName = fontName.replaceAll("[- ]", "").toLowerCase();
 
         /* Java's logical font names are always allowed in the font.name property */
         for(int i = 0; i < LOGICAL_FONTS.length; i++)
@@ -107,7 +110,7 @@ public class ConfigParser
         }
 
         /* Some fonts report their plain variety with "Medium" in the name so try exact search on that too */
-        String altSearchName = searchName + " Medium" ;
+        String altSearchName = searchName + " medium" ;
 
         /* If a font partially matches a user requested name, remember it here in case there are no exact matches */
         String partialMatch = null;
@@ -117,10 +120,10 @@ public class ConfigParser
         {
             /* Always prefer an exact match on the font face name which terminates the search with a result */
             Font font = allFonts[index];
-            String name = font.getFontName();
+            String name = font.getName().replaceAll("[- ]", "");
             if(name.compareToIgnoreCase(searchName) == 0 || name.compareToIgnoreCase(altSearchName) == 0)
             {
-                return name;
+                return font.getName();
             }
 
             /*
@@ -129,11 +132,11 @@ public class ConfigParser
              * font. Always prefer to partial match the shortest possible font face name to match "Times New Roman" before
              * "Times New Roman Bold" for instance.
              */
-            if((font.getFamily() + " " + name).toLowerCase().indexOf(searchName) != -1)
+            if((name + font.getFamily()).replaceAll("[- ]", "").toLowerCase().indexOf(searchName) != -1)
             {
-                if(partialMatch == null || partialMatch.length() > name.length())
+                if(partialMatch == null || partialMatch.length() > font.getName().length())
                 {
-                    partialMatch = name;
+                    partialMatch = font.getName();
                 }
             }
         }
