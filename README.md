@@ -4,10 +4,10 @@
 >
 > This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation; either version 2.1 of the License, or (at your option) any later version.
 > 
-> This program is distributed in the hope that it will be useful, but **WITHOUT ANY WARRANTY**; without even the implied warranty of MERCHANTABILITY or **FITNESS FOR A PARTICULAR PURPOSE**.
+> This program is distributed in the hope that it will be useful, but **WITHOUT ANY WARRANTY**; without even the implied warranty of MERCHANTABILITY or **FITNESS FOR A PARTICULAR PURPOSE**. <br/>
 > See the GNU Lesser General Public License for more details.
 >
-> You should have received a copy of the GNU Lesser General Public License along with this program.
+> You should have received a copy of the GNU Lesser General Public License along with this program. <br/>
 > If not, see <<http://www.gnu.org/licenses/>>.
 
 ----------
@@ -44,10 +44,11 @@ The current Minecraft server has support for full Unicode text inside chat. Howe
 * Added font.antialias and font.dropshadow options to config file.
 
 **Older Versions:**
-* [BetterFonts 1.2.5-2](http://dev.bukkit.org/media/files/586/844/BetterFonts_1.2.5-2.zip) - 2012/04/10
-> Added support for a configuration file to change default font.
-* [BetterFonts 1.2.5](http://dev.bukkit.org/media/files/585/767/BetterFonts_1.2.5.zip) - 2012/04/06
-> Initial release. No config file support.
+*  [BetterFonts 1.2.5-2](http://dev.bukkit.org/media/files/586/844/BetterFonts_1.2.5-2.zip) - 2012/04/10
+    > Added support for a configuration file to change default font.
+
+*  [BetterFonts 1.2.5](http://dev.bukkit.org/media/files/585/767/BetterFonts_1.2.5.zip) - 2012/04/06
+    > Initial release. No config file support.
 
 **Installation:**
 Installation is the same as for any other mod. Extract the contents of the downloaded .zip file into your minecraft.jar, and make sure to **delete the META-INF folder** inside minecraft.jar. This mod is compatible with OptiFine, but make sure to install it **after** OptiFine.
@@ -92,11 +93,11 @@ font.dropshadow=true
 
 #### **Known Issues:** ####
 These are issues that I plan to eventually fix in a future version of the mod:
-1. Add a GUI screen for selecting the font in-game instead of having to edit a config file.
-2. The CJK unified Han characters are always displayed in the same font, but ideally different fonts would be used for Traditional Chinese, Simplified Chinese, Japanese, and Korean based on the in-game language selection.
-3. Bidirectional text editing in the chat message line is broken. You can still type it (with the right keyboard layout) or copy and paste it, but creating text selections in it or moving the cursor through it will look weird.
-4. The text is a little distorted at the smallest GUI size, because it is still drawn at the same font point size, and rescaled as an image. The letters should instead be redrawn using a smaller point size.
-5. The §k "random text" [style code](http://wiki.vg/Chat#Styles) is not supported by this mod, but I've only seen it used for the splash text on the title screen.
-6. When incoming chat text is displayed, it doesn't get wrapped at word boundries the way it normally would without this mod installed.
+ 1.  Add a GUI screen for selecting the font in-game instead of having to edit a config file.
+ 2.  The CJK unified Han characters are always displayed in the same font, but ideally different fonts would be used for Traditional Chinese, Simplified Chinese, Japanese, and Korean based on the in-game language selection.
+ 3.  Bidirectional text editing in the chat message line is broken. You can still type it (with the right keyboard layout) or copy and paste it, but creating text selections in it or moving the cursor through it will look weird.
+ 4.  The text is a little distorted at the smallest GUI size, because it is still drawn at the same font point size, and rescaled as an image. The letters should instead be redrawn using a smaller point size.
+ 5.  The §k "random text" [style code](http://wiki.vg/Chat#Styles) is not supported by this mod, but I've only seen it used for the splash text on the title screen.
+ 6.  When incoming chat text is displayed, it doesn't get wrapped at word boundries the way it normally would without this mod installed.
 
 --------
