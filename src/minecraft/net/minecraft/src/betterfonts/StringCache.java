@@ -170,6 +170,16 @@ public class StringCache
         @Override
         public boolean equals(Object o)
         {
+            /*
+             * There seems to be a timing window inside WeakHashMap itself where a null object can be passed to this
+             * equals() method. Presumably it happens between computing a hash code for the weakly referenced Key object
+             * while it still exists and calling its equals() method after it was garbage collected.
+             */
+            if(o == null)
+            {
+                return false;
+            }
+
             /* Calling toString on a String object simply returns itself so no new object allocation is performed */
             String other = o.toString();
             int length = str.length();
