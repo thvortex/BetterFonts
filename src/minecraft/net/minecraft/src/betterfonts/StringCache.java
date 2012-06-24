@@ -170,6 +170,16 @@ public class StringCache
         @Override
         public boolean equals(Object o)
         {
+            /*
+             * There seems to be a timing window inside WeakHashMap itself where a null object can be passed to this
+             * equals() method. Presumably it happens between computing a hash code for the weakly referenced Key object
+             * while it still exists and calling its equals() method after it was garbage collected.
+             */
+            if(o == null)
+            {
+                return false;
+            }
+
             /* Calling toString on a String object simply returns itself so no new object allocation is performed */
             String other = o.toString();
             int length = str.length();
@@ -571,13 +581,16 @@ public class StringCache
     }
 
     /**
-     * Return the number of characters in a string that will completly fit inside the specified width when rendered.
+     * Return the number of characters in a string that will completly fit inside the specified width when rendered, with
+     * or without prefering to break the line at whitespace instead of breaking in the middle of a word. This private provides
+     * the real implementation of both sizeStringToWidth() and trimStringToWidth().
      *
      * @param str the String to analyze
      * @param width the desired string width (in GUI coordinate system)
+     * @param breakAtSpaces set to prefer breaking line at spaces than in the middle of a word
      * @return the number of characters from str that will fit inside width
      */
-    public int sizeStringToWidth(String str, int width)
+    private int sizeString(String str, int width, boolean breakAtSpaces)
     {
         /* Check for invalid arguments */
         if(str == null || str.isEmpty())
@@ -591,16 +604,52 @@ public class StringCache
         /* The glyph array for a string is sorted by the string's logical character position */
         Glyph glyphs[] = cacheString(str).glyphs;
 
+        /* Index of the last whitespace found in the string; used if breakAtSpaces is true */
+        int wsIndex = -1;
+
         /* Add up the individual advance of each glyph until it exceeds the specified width */
         int advance = 0, index = 0;
         while(index < glyphs.length && advance <= width)
         {
+            /* Keep track of spaces if breakAtSpaces it set */
+            if(breakAtSpaces)
+            {
+                char c = str.charAt(glyphs[index].stringIndex);
+                if(c == ' ')
+                {
+                    wsIndex = index;
+                }
+                else if(c == '\n')
+                {
+                    wsIndex = ++index;
+                    break;
+                }
+            }
+
             advance += glyphs[index].advance;
             index++;
         }
 
+        /* Avoid splitting individual words if breakAtSpaces set; same test condition as in Minecraft's FontRenderer */
+        if(index < glyphs.length && wsIndex != -1 && wsIndex < index)
+        {
+            index = wsIndex;
+        }
+
         /* The string index of the last glyph that wouldn't fit gives the total desired length of the string in characters */
         return index < glyphs.length ? glyphs[index].stringIndex : str.length();
+    }
+
+    /**
+     * Return the number of characters in a string that will completly fit inside the specified width when rendered.
+     *
+     * @param str the String to analyze
+     * @param width the desired string width (in GUI coordinate system)
+     * @return the number of characters from str that will fit inside width
+     */
+    public int sizeStringToWidth(String str, int width)
+    {
+        return sizeString(str, width, true);
     }
 
     /**
@@ -613,7 +662,7 @@ public class StringCache
      */
     public String trimStringToWidth(String str, int width, boolean reverse)
     {
-        int length = sizeStringToWidth(str, width);
+        int length = sizeString(str, width, false);
         str = str.substring(0, length);
 
         if(reverse)
