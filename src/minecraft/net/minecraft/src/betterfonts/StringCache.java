@@ -148,14 +148,22 @@ public class StringCache
         {
             int code = 0, length = str.length();
 
+            /*
+             * True if a section mark character was last seen. In this case, if the next character is a digit, it must
+             * not be considered equal to any other digit. This forces any string that differs in color codes only to
+             * have a separate entry in the StringCache.
+             */
+            boolean colorCode = false;
+
             for (int index = 0; index < length; index++)
             {
                 char c = str.charAt(index);
-                if(c >= '0' && c <= '9')
+                if(c >= '0' && c <= '9' && !colorCode)
                 {
                     c = '0';
                 }
                 code = (code * 31) + c;
+                colorCode = (c == '\u00A7');
             }
 
             return code;
@@ -189,15 +197,23 @@ public class StringCache
                 return false;
             }
 
+            /*
+             * True if a section mark character was last seen. In this case, if the next character is a digit, it must
+             * not be considered equal to any other digit. This forces any string that differs in color codes only to
+             * have a separate entry in the StringCache.
+             */
+            boolean colorCode = false;
+
             for(int index = 0; index < length; index++)
             {
                 char c1 = str.charAt(index);
                 char c2 = other.charAt(index);
 
-                if(c1 != c2 && (c1 < '0' || c1 > '9' || c2 < '0' || c2 > '9'))
+                if(c1 != c2 && (c1 < '0' || c1 > '9' || c2 < '0' || c2 > '9' || colorCode))
                 {
                     return false;
                 }
+                colorCode = (c1 == '\u00A7');
             }
 
             return true;
