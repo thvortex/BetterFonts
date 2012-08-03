@@ -1,5 +1,5 @@
 diff --git a/src/minecraft/net/minecraft/src/FontRenderer.java b/src/minecraft/net/minecraft/src/FontRenderer.java
-index 3251f0a..1091df1 100644
+index 8670445..dc2ddf6 100644
 --- a/src/minecraft/net/minecraft/src/FontRenderer.java
 +++ b/src/minecraft/net/minecraft/src/FontRenderer.java
 @@ -1,5 +1,7 @@
@@ -10,7 +10,7 @@ index 3251f0a..1091df1 100644
  import java.awt.image.BufferedImage;
  import java.io.IOException;
  import java.io.InputStream;
-@@ -13,6 +15,10 @@ import org.lwjgl.opengl.GL11;
+@@ -11,6 +13,10 @@ import org.lwjgl.opengl.GL11;
  
  public class FontRenderer
  {
@@ -18,10 +18,10 @@ index 3251f0a..1091df1 100644
 +    public StringCache stringCache;
 +    public boolean dropShadowEnabled = true;
 +
-     /**
-      * Compiled regular expression pattern for matching color codes in a string
-      */
-@@ -181,6 +187,25 @@ public class FontRenderer
+     private int charWidth[];
+     public int fontTextureName;
+ 
+@@ -207,6 +213,25 @@ public class FontRenderer
  
              colorCode[l] = (l1 & 0xff) << 16 | (j2 & 0xff) << 8 | l2 & 0xff;
          }
@@ -47,7 +47,7 @@ index 3251f0a..1091df1 100644
      }
  
      /**
-@@ -310,7 +335,11 @@ public class FontRenderer
+@@ -338,7 +363,11 @@ public class FontRenderer
              par1Str = bidiReorder(par1Str);
          }
  
@@ -60,7 +60,7 @@ index 3251f0a..1091df1 100644
          i = Math.max(i, renderString(par1Str, par2, par3, par4, false));
          return i;
      }
-@@ -333,6 +362,10 @@ public class FontRenderer
+@@ -363,6 +392,10 @@ public class FontRenderer
       */
      private String bidiReorder(String par1Str)
      {
@@ -71,7 +71,7 @@ index 3251f0a..1091df1 100644
          if (par1Str == null || !Bidi.requiresBidi(par1Str.toCharArray(), 0, par1Str.length()))
          {
              return par1Str;
-@@ -567,7 +600,14 @@ public class FontRenderer
+@@ -622,7 +655,14 @@ public class FontRenderer
              GL11.glColor4f(red, blue, green, alpha);
              posX = par2;
              posY = par3;
@@ -87,7 +87,7 @@ index 3251f0a..1091df1 100644
              return (int)posX;
          }
          else
-@@ -581,6 +621,10 @@ public class FontRenderer
+@@ -636,6 +676,10 @@ public class FontRenderer
       */
      public int getStringWidth(String par1Str)
      {
@@ -98,7 +98,7 @@ index 3251f0a..1091df1 100644
          if (par1Str == null)
          {
              return 0;
-@@ -670,6 +714,10 @@ public class FontRenderer
+@@ -730,6 +774,10 @@ public class FontRenderer
       */
      public String trimStringToWidth(String par1Str, int par2, boolean par3)
      {
@@ -109,7 +109,7 @@ index 3251f0a..1091df1 100644
          StringBuilder stringbuilder = new StringBuilder();
          int i = 0;
          int j = par3 ? par1Str.length() - 1 : 0;
-@@ -928,6 +976,10 @@ public class FontRenderer
+@@ -1032,6 +1080,10 @@ public class FontRenderer
       */
      private int sizeStringToWidth(String par1Str, int par2)
      {

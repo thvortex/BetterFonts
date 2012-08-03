@@ -110,9 +110,6 @@ public class GlyphCache
     /** Intermediate data array for use with textureImage.getRgb(). */
     private int imageData[] = new int[TEXTURE_WIDTH * TEXTURE_HEIGHT];
 
-    /** Wrapper around a direct byte buffer which can be used with glTexSubImage2D(). */
-    //private IntBuffer imageBuffer = GLAllocation.createDirectIntBuffer(TEXTURE_WIDTH * TEXTURE_HEIGHT);
-
     /**
      * A big-endian direct int buffer used with glTexSubImage2D() and glTexImage2D(). Used for loading the pre-rendered glyph
      * images from the glyphCacheImage BufferedImage into OpenGL textures. This buffer uses big-endian byte ordering to ensure
@@ -522,13 +519,6 @@ public class GlyphCache
         {
             /* Load imageBuffer with pixel data ready for transfer to OpenGL texture */
             updateImageBuffer(dirty.x, dirty.y, dirty.width, dirty.height);
-
-            /*
-            * NOTE: Since the text is drawn in white with full alpha, each pixel is always all 0s or all 1s
-            * and there is no need to manually convert from Java's ARGB layout to OpenGLs RGBA. This avoids
-            * having to copy into an extra byte array first; instead the int array is copied straight to a
-            * direct int buffer.
-            */
 
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureName);
             GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, dirty.x, dirty.y, dirty.width, dirty.height,

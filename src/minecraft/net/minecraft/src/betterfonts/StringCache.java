@@ -123,6 +123,15 @@ public class StringCache
     private boolean antiAliasEnabled = false;
 
     /**
+     * Reference to the main Minecraft thread that created this GlyphCache object. Starting with Minecraft 1.3.1, it is possible
+     * for GlyphCache.cacheGlyphs() to be invoked from the TcpReaderThread while processing a chat packet and computing the width
+     * of the incoming chat text. Unfortunately, if cacheGlyphs() makes any OpenGL calls from any thread except the main one,
+     * it will crash LWJGL with a NullPointerException. By remembering the initial thread and comparing it later against
+     * Thread.currentThread(), the StringCache code can avoid calling cacheGlyphs() when it's not safe to do so.
+     */
+    private Thread mainThread;
+
+    /**
      * Wraps a String and acts as the key into stringCache. The hashCode() and equals() methods consider all ASCII digits
      * to be equal when hashing and comparing Key objects together. Therefore, Strings which only differ in their digits will
      * be all hashed together into the same entry. The renderString() method will then substitute the correct digit glyph on
@@ -332,6 +341,9 @@ public class StringCache
      */
     public StringCache(int colors[])
     {
+        /* StringCache is created by the main game thread; remember it for later thread safety checks */
+        mainThread = Thread.currentThread();
+
         glyphCache = new GlyphCache();
         colorTable = colors;
 
@@ -723,9 +735,6 @@ public class StringCache
      */
     private Entry cacheString(String str)
     {
-        /* Re-use existing lookupKey to avoid allocation overhead on the critical rendering path */
-        lookupKey.str = str;
-
         /*
          * New Key object allocated only if the string was not found in the StringCache using lookupKey. This variable must
          * be outside the (entry == null) code block to have a temporary strong reference between the time when the Key is
@@ -733,8 +742,20 @@ public class StringCache
          */
         Key key;
 
-        /* If this string is already in the cache, simply return the cached Entry object */
-        Entry entry = stringCache.get(lookupKey);
+        /* Either a newly created Entry object for the string, or the cached Entry if the string is already in the cache */
+        Entry entry = null;
+
+        /* Don't perform a cache lookup from other threads because the stringCache is not synchronized */
+        if(mainThread == Thread.currentThread())
+        {
+            /* Re-use existing lookupKey to avoid allocation overhead on the critical rendering path */
+            lookupKey.str = str;
+
+            /* If this string is already in the cache, simply return the cached Entry object */
+            entry = stringCache.get(lookupKey);
+        }
+
+        /* If string is not cached (or not on main thread) then layout the string */
         if(entry == null)
         {
             /* layoutGlyphVector() requires a char[] so create it here and pass it around to avoid duplication later on */
@@ -778,27 +799,38 @@ public class StringCache
                 glyph.stringIndex += shift;
             }
 
-            /* Wrap the string in a Key object (to change how ASCII digits are compared) and cache it along with the newly generated Entry */
-            key = new Key();
+            /*
+             * Do not actually cache the string when called from other threads because GlyphCache.cacheGlyphs() will not have been called
+             * and the cache entry does not contain any texture data needed for rendering.
+             */
+            if(mainThread == Thread.currentThread())
+            {
+                /* Wrap the string in a Key object (to change how ASCII digits are compared) and cache it along with the newly generated Entry */
+                key = new Key();
 
-            /* Make a copy of the original String to avoid creating a strong reference to it */
-            key.str = new String(str);
-            entry.keyRef = new WeakReference(key);
-            stringCache.put(key, entry);
+                /* Make a copy of the original String to avoid creating a strong reference to it */
+                key.str = new String(str);
+                entry.keyRef = new WeakReference(key);
+                stringCache.put(key, entry);
+            }
         }
 
-        /*
-         * Add the String passed into this method to the stringWeakMap so it keeps the Key reference live as long as the String is in use.
-         * If an existing Entry was already found in the stringCache, it's possible that its Key has already been garbage collected. The
-         * code below checks for this to avoid adding (str, null) entries into weakRefCache. Note that if a new Key object was created, it
-         * will still be live because of the strong reference created by the "key" variable.
-         */
-        Key oldKey = entry.keyRef.get();
-        if(oldKey != null)
+        /* Do not access weakRefCache from other threads since it is unsynchronized, and for a newly created entry, the keyRef is null */
+        if(mainThread == Thread.currentThread())
         {
-            weakRefCache.put(str, oldKey);
+            /*
+             * Add the String passed into this method to the stringWeakMap so it keeps the Key reference live as long as the String is in use.
+             * If an existing Entry was already found in the stringCache, it's possible that its Key has already been garbage collected. The
+             * code below checks for this to avoid adding (str, null) entries into weakRefCache. Note that if a new Key object was created, it
+             * will still be live because of the strong reference created by the "key" variable.
+             */
+            Key oldKey = entry.keyRef.get();
+            if(oldKey != null)
+            {
+                weakRefCache.put(str, oldKey);
+            }
+            lookupKey.str = null;
         }
-        lookupKey.str = null;
 
         /* Return either the existing or the newly created entry so it can be accessed immediately */
         return entry;
@@ -1109,8 +1141,16 @@ public class StringCache
      */
     private int layoutFont(List<Glyph> glyphList, char text[], int start, int limit, int layoutFlags, int advance, Font font)
     {
-        /* Ensure that all glyphs used by the string are pre-rendered and cached in the texture */
-        glyphCache.cacheGlyphs(font, text, start, limit, layoutFlags);
+        /*
+         * Ensure that all glyphs used by the string are pre-rendered and cached in the texture. Only safe to do so from the
+         * main thread because cacheGlyphs() can crash LWJGL if it makes OpenGL calls from any other thread. In this case,
+         * cacheString() will also not insert the entry into the stringCache since it may be incomplete if lookupGlyph()
+         * returns null for any glyphs not yet stored in the glyph cache.
+         */
+        if(mainThread == Thread.currentThread())
+        {
+            glyphCache.cacheGlyphs(font, text, start, limit, layoutFlags);
+        }
 
         /* Creating a GlyphVector takes care of all language specific OpenType glyph substitutions and positionings */
         GlyphVector vector = glyphCache.layoutGlyphVector(font, text, start, limit, layoutFlags);
