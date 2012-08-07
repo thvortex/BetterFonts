@@ -1,122 +1,72 @@
 diff --git a/src/minecraft/net/minecraft/src/FontRenderer.java b/src/minecraft/net/minecraft/src/FontRenderer.java
-index 8670445..dc2ddf6 100644
+index dc2ddf6..4c68255 100644
 --- a/src/minecraft/net/minecraft/src/FontRenderer.java
 +++ b/src/minecraft/net/minecraft/src/FontRenderer.java
-@@ -1,5 +1,7 @@
- package net.minecraft.src;
- 
-+import net.minecraft.src.betterfonts.StringCache;
-+import net.minecraft.src.betterfonts.ConfigParser;
- import java.awt.image.BufferedImage;
- import java.io.IOException;
- import java.io.InputStream;
-@@ -11,6 +13,10 @@ import org.lwjgl.opengl.GL11;
- 
- public class FontRenderer
- {
-+    public static boolean betterFontsEnabled = true;
-+    public StringCache stringCache;
-+    public boolean dropShadowEnabled = true;
-+
-     private int charWidth[];
-     public int fontTextureName;
- 
-@@ -207,6 +213,25 @@ public class FontRenderer
- 
-             colorCode[l] = (l1 & 0xff) << 16 | (j2 & 0xff) << 8 | l2 & 0xff;
-         }
-+
-+        /* Only use OpenType rendering for the primary FontRenderer and not for the enchantment table Standard Galactic renderer */
-+        if(par2Str.equals("/font/default.png"))
-+        {
-+            stringCache = new StringCache(colorCode);
-+
-+            /* Read optional config file to override the default font name/size */
-+            ConfigParser config = new ConfigParser();
-+            if(config.loadConfig("/config/BetterFonts.cfg"))
-+            {
-+                String fontName = config.getFontName("SansSerif");
-+                int fontSize = config.getFontSize(18);
-+                boolean antiAlias = config.getBoolean("font.antialias", false);
-+                dropShadowEnabled = config.getBoolean("font.dropshadow", true);
-+
-+                stringCache.setDefaultFont(fontName, fontSize, antiAlias);
-+                System.out.println("BetterFonts configuration loaded");
-+            }
-+        }
-     }
+@@ -24,7 +24,7 @@ public class FontRenderer
+     public int FONT_HEIGHT;
+     public Random fontRandom;
+     private byte glyphWidth[];
+-    private final int glyphTextureName[];
++    private int glyphTextureName[]; /* Removed final for use with MCPatcher's initialize() */
+     private int colorCode[];
  
      /**
-@@ -338,7 +363,11 @@ public class FontRenderer
-             par1Str = bidiReorder(par1Str);
+@@ -33,7 +33,7 @@ public class FontRenderer
+     private int boundTextureName;
+ 
+     /** The RenderEngine used to load and setup glyph textures. */
+-    private final RenderEngine renderEngine;
++    private RenderEngine renderEngine; /* Removed final for user with MCPatcher's initialize() */
+ 
+     /** Current X coordinate at which to draw the next character. */
+     private float posX;
+@@ -44,7 +44,7 @@ public class FontRenderer
+     /**
+      * If true, strings should be rendered with Unicode fonts instead of the default.png font
+      */
+-    private boolean unicodeFlag;
++    public boolean unicodeFlag; /* MCPatcher expects unicodeFlag to be public */
+ 
+     /**
+      * If true, the Unicode Bidirectional Algorithm should be run before rendering any string.
+@@ -104,6 +104,17 @@ public class FontRenderer
+ 
+     public FontRenderer(GameSettings par1GameSettings, String par2Str, RenderEngine par3RenderEngine, boolean par4)
+     {
++        unicodeFlag = par4;
++        initialize(par1GameSettings, par2Str, par3RenderEngine);
++    }
++
++    /**
++     * MCPatcher injects an initialize() method into FontRenderer, so it'll expect one to exist. This will reload the bitmap
++     * font when switching textures with mcpatcher installed. Otherwise it's never called directly by Minecraft, except
++     * once by the above constructor.
++     */
++    public void initialize(GameSettings par1GameSettings, String par2Str, RenderEngine par3RenderEngine)
++    {
+         charWidth = new int[256];
+         fontTextureName = 0;
+         FONT_HEIGHT = 9;
+@@ -117,7 +128,6 @@ public class FontRenderer
+         underlineStyle = false;
+         strikethroughStyle = false;
+         renderEngine = par3RenderEngine;
+-        unicodeFlag = par4;
+         BufferedImage bufferedimage;
+ 
+         try
+@@ -214,8 +224,12 @@ public class FontRenderer
+             colorCode[l] = (l1 & 0xff) << 16 | (j2 & 0xff) << 8 | l2 & 0xff;
          }
  
--        int i = renderString(par1Str, par2 + 1, par3 + 1, par4, true);
-+        int i = 0;
-+        if(dropShadowEnabled)
-+        {
-+            i = renderString(par1Str, par2 + 1, par3 + 1, par4, true);
-+        }
-         i = Math.max(i, renderString(par1Str, par2, par3, par4, false));
-         return i;
-     }
-@@ -363,6 +392,10 @@ public class FontRenderer
-      */
-     private String bidiReorder(String par1Str)
-     {
-+        if (betterFontsEnabled && stringCache != null)
-+        {
-+            return par1Str;
-+        }
-         if (par1Str == null || !Bidi.requiresBidi(par1Str.toCharArray(), 0, par1Str.length()))
+-        /* Only use OpenType rendering for the primary FontRenderer and not for the enchantment table Standard Galactic renderer */
+-        if(par2Str.equals("/font/default.png"))
++        /*
++         * Only use OpenType rendering for the primary FontRenderer and not for the enchantment table Standard Galactic renderer.
++         * Also, mcpatcher will call initialize() when switching texture packs to reload the bitmap font, but the StringCache
++         * should not be re-created a second time or it will leak OpenGL textures.
++         */
++        if(par2Str.equals("/font/default.png") && stringCache == null)
          {
-             return par1Str;
-@@ -622,7 +655,14 @@ public class FontRenderer
-             GL11.glColor4f(red, blue, green, alpha);
-             posX = par2;
-             posY = par3;
--            renderStringAtPos(par1Str, par5);
-+            if (betterFontsEnabled && stringCache != null)
-+            {
-+                posX += stringCache.renderString(par1Str, par2, par3, par4, par5);
-+            }
-+            else
-+            {
-+                renderStringAtPos(par1Str, par5);
-+            }
-             return (int)posX;
-         }
-         else
-@@ -636,6 +676,10 @@ public class FontRenderer
-      */
-     public int getStringWidth(String par1Str)
-     {
-+        if (betterFontsEnabled && stringCache != null)
-+        {
-+            return stringCache.getStringWidth(par1Str);
-+        }
-         if (par1Str == null)
-         {
-             return 0;
-@@ -730,6 +774,10 @@ public class FontRenderer
-      */
-     public String trimStringToWidth(String par1Str, int par2, boolean par3)
-     {
-+        if (betterFontsEnabled && stringCache != null)
-+        {
-+            return stringCache.trimStringToWidth(par1Str, par2, par3);
-+        }
-         StringBuilder stringbuilder = new StringBuilder();
-         int i = 0;
-         int j = par3 ? par1Str.length() - 1 : 0;
-@@ -1032,6 +1080,10 @@ public class FontRenderer
-      */
-     private int sizeStringToWidth(String par1Str, int par2)
-     {
-+        if (betterFontsEnabled && stringCache != null)
-+        {
-+            return stringCache.sizeStringToWidth(par1Str, par2);
-+        }
-         int i = par1Str.length();
-         int j = 0;
-         int k = 0;
+             stringCache = new StringCache(colorCode);
+ 
