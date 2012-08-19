@@ -1,17 +1,41 @@
 diff --git a/src/minecraft/net/minecraft/src/FontRenderer.java b/src/minecraft/net/minecraft/src/FontRenderer.java
-index dc2ddf6..4c68255 100644
+index 6485809..92e8222 100644
 --- a/src/minecraft/net/minecraft/src/FontRenderer.java
 +++ b/src/minecraft/net/minecraft/src/FontRenderer.java
-@@ -24,7 +24,7 @@ public class FontRenderer
-     public int FONT_HEIGHT;
-     public Random fontRandom;
-     private byte glyphWidth[];
--    private final int glyphTextureName[];
-+    private int glyphTextureName[]; /* Removed final for use with MCPatcher's initialize() */
-     private int colorCode[];
+@@ -1,5 +1,7 @@
+ package net.minecraft.src;
+ 
++import net.minecraft.src.betterfonts.StringCache;
++import net.minecraft.src.betterfonts.ConfigParser;
+ import java.awt.image.BufferedImage;
+ import java.io.IOException;
+ import java.io.InputStream;
+@@ -12,10 +14,15 @@ import org.lwjgl.opengl.GL11;
+ 
+ public class FontRenderer
+ {
++    public static boolean betterFontsEnabled = true;
++    public StringCache stringCache;
++    public boolean dropShadowEnabled = true;
++
+     /** Array of width of all the characters in default.png */
+     private int[] charWidth = new int[256];
+     public int fontTextureName = 0;
+ 
++
+     /** the height in pixels of default text */
+     public int FONT_HEIGHT = 9;
+     public Random fontRandom = new Random();
+@@ -28,7 +35,7 @@ public class FontRenderer
+     /**
+      * Array of GL texture ids for loaded glyph_XX.png images. Indexed by Unicode block (group of 256 chars).
+      */
+-    private final int[] glyphTextureName = new int[256];
++    private int[] glyphTextureName = new int[256]; /* Removed final for use with MCPatcher's initialize() */
  
      /**
-@@ -33,7 +33,7 @@ public class FontRenderer
+      * Array of RGB triplets defining the 16 standard chat colors followed by 16 darker version of the same colors for
+@@ -42,7 +49,7 @@ public class FontRenderer
      private int boundTextureName;
  
      /** The RenderEngine used to load and setup glyph textures. */
@@ -20,7 +44,7 @@ index dc2ddf6..4c68255 100644
  
      /** Current X coordinate at which to draw the next character. */
      private float posX;
-@@ -44,7 +44,7 @@ public class FontRenderer
+@@ -53,7 +60,7 @@ public class FontRenderer
      /**
       * If true, strings should be rendered with Unicode fonts instead of the default.png font
       */
@@ -29,12 +53,13 @@ index dc2ddf6..4c68255 100644
  
      /**
       * If true, the Unicode Bidirectional Algorithm should be run before rendering any string.
-@@ -104,6 +104,17 @@ public class FontRenderer
+@@ -101,8 +108,18 @@ public class FontRenderer
  
      public FontRenderer(GameSettings par1GameSettings, String par2Str, RenderEngine par3RenderEngine, boolean par4)
      {
-+        unicodeFlag = par4;
-+        initialize(par1GameSettings, par2Str, par3RenderEngine);
+-        this.renderEngine = par3RenderEngine;
+         this.unicodeFlag = par4;
++        this.initialize(par1GameSettings, par2Str, par3RenderEngine);
 +    }
 +
 +    /**
@@ -44,29 +69,110 @@ index dc2ddf6..4c68255 100644
 +     */
 +    public void initialize(GameSettings par1GameSettings, String par2Str, RenderEngine par3RenderEngine)
 +    {
-         charWidth = new int[256];
-         fontTextureName = 0;
-         FONT_HEIGHT = 9;
-@@ -117,7 +128,6 @@ public class FontRenderer
-         underlineStyle = false;
-         strikethroughStyle = false;
-         renderEngine = par3RenderEngine;
--        unicodeFlag = par4;
-         BufferedImage bufferedimage;
++        this.renderEngine = par3RenderEngine;
+         BufferedImage var5;
  
          try
-@@ -214,8 +224,12 @@ public class FontRenderer
-             colorCode[l] = (l1 & 0xff) << 16 | (j2 & 0xff) << 8 | l2 & 0xff;
-         }
+@@ -203,6 +220,29 @@ public class FontRenderer
  
--        /* Only use OpenType rendering for the primary FontRenderer and not for the enchantment table Standard Galactic renderer */
--        if(par2Str.equals("/font/default.png"))
+             this.colorCode[var9] = (var11 & 255) << 16 | (var12 & 255) << 8 | var13 & 255;
+         }
++
 +        /*
 +         * Only use OpenType rendering for the primary FontRenderer and not for the enchantment table Standard Galactic renderer.
 +         * Also, mcpatcher will call initialize() when switching texture packs to reload the bitmap font, but the StringCache
 +         * should not be re-created a second time or it will leak OpenGL textures.
 +         */
-+        if(par2Str.equals("/font/default.png") && stringCache == null)
-         {
-             stringCache = new StringCache(colorCode);
++        if(par2Str.equals("/font/default.png") && this.stringCache == null)
++        {
++            this.stringCache = new StringCache(this.colorCode);
++
++            /* Read optional config file to override the default font name/size */
++            ConfigParser config = new ConfigParser();
++            if(config.loadConfig("/config/BetterFonts.cfg"))
++            {
++                String fontName = config.getFontName("SansSerif");
++                int fontSize = config.getFontSize(18);
++                boolean antiAlias = config.getBoolean("font.antialias", false);
++                dropShadowEnabled = config.getBoolean("font.dropshadow", true);
++
++                this.stringCache.setDefaultFont(fontName, fontSize, antiAlias);
++                System.out.println("BetterFonts configuration loaded");
++            }
++        }
+     }
  
+     /**
+@@ -321,7 +361,11 @@ public class FontRenderer
+             par1Str = this.bidiReorder(par1Str);
+         }
+ 
+-        int var5 = this.renderString(par1Str, par2 + 1, par3 + 1, par4, true);
++        int var5 = 0;
++        if (this.dropShadowEnabled)
++        {
++            var5 = this.renderString(par1Str, par2 + 1, par3 + 1, par4, true);
++        }
+         var5 = Math.max(var5, this.renderString(par1Str, par2, par3, par4, false));
+         return var5;
+     }
+@@ -346,6 +390,10 @@ public class FontRenderer
+      */
+     private String bidiReorder(String par1Str)
+     {
++        if (this.betterFontsEnabled && this.stringCache != null)
++        {
++            return par1Str;
++        }
+         if (par1Str != null && Bidi.requiresBidi(par1Str.toCharArray(), 0, par1Str.length()))
+         {
+             Bidi var2 = new Bidi(par1Str, -2);
+@@ -603,7 +651,14 @@ public class FontRenderer
+             GL11.glColor4f(this.red, this.blue, this.green, this.alpha);
+             this.posX = (float)par2;
+             this.posY = (float)par3;
+-            this.renderStringAtPos(par1Str, par5);
++            if (this.betterFontsEnabled && this.stringCache != null)
++            {
++                this.posX += stringCache.renderString(par1Str, par2, par3, par4, par5);
++            }
++            else
++            {
++                this.renderStringAtPos(par1Str, par5);
++            }
+             return (int)this.posX;
+         }
+         else
+@@ -617,6 +672,10 @@ public class FontRenderer
+      */
+     public int getStringWidth(String par1Str)
+     {
++        if (this.betterFontsEnabled && this.stringCache != null)
++        {
++            return this.stringCache.getStringWidth(par1Str);
++        }
+         if (par1Str == null)
+         {
+             return 0;
+@@ -718,6 +777,10 @@ public class FontRenderer
+      */
+     public String trimStringToWidth(String par1Str, int par2, boolean par3)
+     {
++        if (this.betterFontsEnabled && this.stringCache != null)
++        {
++            return this.stringCache.trimStringToWidth(par1Str, par2, par3);
++        }
+         StringBuilder var4 = new StringBuilder();
+         int var5 = 0;
+         int var6 = par3 ? par1Str.length() - 1 : 0;
+@@ -1032,6 +1095,10 @@ public class FontRenderer
+      */
+     private int sizeStringToWidth(String par1Str, int par2)
+     {
++        if (this.betterFontsEnabled && this.stringCache != null)
++        {
++            return this.stringCache.sizeStringToWidth(par1Str, par2);
++        }
+         int var3 = par1Str.length();
+         int var4 = 0;
+         int var5 = 0;
