@@ -2,8 +2,8 @@
 
 The BetterFonts mod adds TrueType/OpenType font support for Minecraft. This mod will use the fonts installed on your system for drawing text instead of the builtin bitmap fonts that come with Minecraft. Languages such as Arabic and Hindi look much better with this mod since both require complex layout that the bitmap fonts simply can't provide. All in-game text will change to use the new fonts including GUIs, the F3 debug screen, chat, and even signs. This mod should have little or no impact on performance.
 
-**Server Support:**
-The Minecraft 1.2.5 client allowed entering full Unicode text in chat (assuming you had the right keyboard layout selected). Unfortunately that no longer works in 1.3.1, and I'm still investigating the issue.
+**Unicode Text in Chat:**
+Starting with 1.3.2, both the regular Minecraft server and CraftBukkit allow using full Unicode text in chat. Unfortunately, the Minecraft client comes with an older version of the LWJGL library which doesn't handle keyboard layouts properly. You will have to [manually update LWJGL](http://www.minecraftwiki.net/wiki/LWJGL) to the latest version, if you need Unicode support in chat.
 
 ### Forum & Downloads: ###
 For more information, discussions, and downloadable versions of the mod, see the [BetterFonts Thread](http://www.minecraftforum.net/topic/1142084-125-betterfonts-opentype-font-support/) on the Minecraft Forums.
