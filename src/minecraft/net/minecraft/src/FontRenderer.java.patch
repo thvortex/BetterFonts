@@ -1,5 +1,5 @@
 diff --git a/src/minecraft/net/minecraft/src/FontRenderer.java b/src/minecraft/net/minecraft/src/FontRenderer.java
-index 6485809..92e8222 100644
+index 1cff99e..e520d0b 100644
 --- a/src/minecraft/net/minecraft/src/FontRenderer.java
 +++ b/src/minecraft/net/minecraft/src/FontRenderer.java
 @@ -1,5 +1,7 @@
@@ -165,7 +165,7 @@ index 6485809..92e8222 100644
          StringBuilder var4 = new StringBuilder();
          int var5 = 0;
          int var6 = par3 ? par1Str.length() - 1 : 0;
-@@ -1032,6 +1095,10 @@ public class FontRenderer
+@@ -1037,6 +1100,10 @@ public class FontRenderer
       */
      private int sizeStringToWidth(String par1Str, int par2)
      {
