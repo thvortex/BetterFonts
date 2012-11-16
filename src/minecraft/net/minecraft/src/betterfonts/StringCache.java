@@ -649,7 +649,7 @@ public class StringCache
                 }
                 else if(c == '\n')
                 {
-                    wsIndex = ++index;
+                    wsIndex = index;
                     break;
                 }
             }
